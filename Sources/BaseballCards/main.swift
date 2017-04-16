@@ -48,5 +48,26 @@ router.put("api/v1/card") { //4
     next()
 }
 
+router.get("api/v1/card/:id") { //1
+    (request, response, next) in
+
+    guard
+        let id = request.parameters["id"] else { //2
+        _ = response.send(status: .badRequest)
+        next()
+        return
+    }
+
+    if
+        let card = cards.filter({$0.id == id}).first { //3
+        response.send(json: JSON(card.dictionaryRepresentation)) //4
+        next()
+    }
+    else {
+        _ = response.send(status: .notFound) //5
+        next()
+    }
+}
+
 Kitura.addHTTPServer(onPort: 8090, with: router)
 Kitura.run()
