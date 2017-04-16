@@ -15,6 +15,7 @@ router.get("/") {
     next()
 }
 
+//MARK: PUT
 router.put("api/v1/card", middleware: BodyParser()) //3
 router.put("api/v1/card") { //4
     (request, response, next) in
@@ -48,6 +49,7 @@ router.put("api/v1/card") { //4
     next()
 }
 
+//MARK: GET
 router.get("api/v1/card/:id") { //1
     (request, response, next) in
 
@@ -69,6 +71,7 @@ router.get("api/v1/card/:id") { //1
     }
 }
 
+//MARK: POST
 router.post("api/v1/card/:id", middleware: BodyParser()) //1
 router.post("api/v1/card/:id") { //2
     (request, response, next) in
@@ -105,6 +108,29 @@ router.post("api/v1/card/:id") { //2
                                id: id) //7
 
     cards[oldCardIndex] = newCard //8
+    _ = response.send(status: .OK)
+    next()
+}
+
+//MARK: DELETE
+router.delete("api/v1/card/:id") { //1
+    (request, response, next) in
+
+    guard
+        let id = request.parameters["id"] else { //2
+            _ = response.send(status: .badRequest)
+            next()
+            return
+    }
+
+    guard
+        let oldCardIndex = cards.index(where: {$0.id == id}) else { //3
+            _ = response.send(status: .notFound) //4
+            next()
+            return
+    }
+
+    cards.remove(at: oldCardIndex) //5
     _ = response.send(status: .OK)
     next()
 }
