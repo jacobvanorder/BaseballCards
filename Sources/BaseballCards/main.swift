@@ -152,7 +152,8 @@ router.post("api/v2/card/:id") {
 }
 
 //MARK: DELETE
-router.delete("api/v1/card/:id") {
+
+router.delete("api/v2/card/:id") {
     (request, response, next) in
 
     guard
@@ -161,17 +162,35 @@ router.delete("api/v1/card/:id") {
             next()
             return
     }
-
-    guard
-        let oldCardIndex = cards.index(where: {$0.id == id}) else {
-            _ = response.send(status: .notFound)
-            next()
-            return
-    }
-
-    cards.remove(at: oldCardIndex)
-    _ = response.send(status: .OK)
-    next()
+    
+    database.retrieve(id, //1
+        callback: {
+            (optionalJSONDocument, optionalError) in
+            
+            guard
+                let jsonDocument = optionalJSONDocument,
+                let revision = jsonDocument["_rev"].string else {
+                    _ = response.send(status: .notFound)
+                    next()
+                    return
+            }
+            
+            database.delete(id, //2
+                rev: revision, callback: {
+                    (optionalError: NSError?) in
+                    
+                    if let error = optionalError { //3
+                        _ = response.send(status: .internalServerError)
+                        next()
+                        return
+                    }
+                    else {
+                        _ = response.send(status: .OK) //4
+                        next()
+                        return
+                    }
+            })
+    })
 }
 
 Kitura.addHTTPServer(onPort: 8090, with: router)
