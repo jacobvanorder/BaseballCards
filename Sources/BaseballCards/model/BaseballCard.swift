@@ -16,7 +16,7 @@ struct BaseballCard {
     let cardNumber: String
     let cardCompanyName: String
     let id: String
-//    let userID: String //Authentication
+    let userID: String //Authentication
     
     //Convenience method that will return a dictionary with the keys and values of the BaseballCard's properties.
     var dictionaryRepresentation: [String: Any] {
@@ -26,7 +26,7 @@ struct BaseballCard {
                 "cardNumber": self.cardNumber,
                 "cardCompanyName": self.cardCompanyName,
                 "id": self.id,
-                /*"userID": self.userID,*/]
+                "userID": self.userID,]
     }
     
     //Convenience method that will return a SwiftyJSON object of the BaseballCard.
@@ -38,7 +38,7 @@ struct BaseballCard {
     static func dictionary(from couchDocument: JSON, with id: String, from userID: String? = .none) -> [String: Any] {
         var dictionary = [String: Any]()
         dictionary["id"] = id
-        /*dictionary["userID"] = userID ?? couchDocument["userID"].string ?? ""*/
+        dictionary["userID"] = userID ?? couchDocument["userID"].string ?? ""
         dictionary["playerName"] = couchDocument["playerName"].string
         dictionary["teamNames"] = couchDocument["teamNames"].array?.flatMap({$0.string})
         dictionary["year"] = couchDocument["year"].int

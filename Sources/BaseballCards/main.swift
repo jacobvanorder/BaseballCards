@@ -3,6 +3,10 @@ import SwiftyJSON
 import Foundation
 import CouchDB
 
+import Kitura_CredentialsTwitter //1
+import Credentials
+import KituraSession
+
 //MARK: Database
 let connectionProperties = ConnectionProperties(host: "127.0.0.1",
                                                 port: 5984,
@@ -12,7 +16,34 @@ let database = client.database("baseball_cards")
 
 let router = Router()
 
-var cards = [BaseballCard]()
+let session = Session(secret: "I thought I told you to trim those sideburns!") //2
+router.all(middleware: session)
+
+let twitter = CredentialsTwitterVerify(consumerKey: consumerKey,
+                                       consumerSecret: consumerSecret) //3
+let credentials = Credentials() //4
+credentials.register(plugin: twitter) //5
+
+//For talk purposes only
+let twitterWebAuth = CredentialsTwitter(consumerKey: consumerKey,
+                                        consumerSecret: consumerSecret)
+credentials.register(plugin: twitterWebAuth)
+credentials.options["failureRedirect"] = "/login/twitter/token"
+
+router.get("/login/twitter/token",
+           handler: credentials.authenticate(credentialsType: twitterWebAuth.name))
+
+router.get("/login/twitter/token/callback",
+           handler: credentials.authenticate(credentialsType: twitterWebAuth.name))
+
+/// This is just here for me to authenticate and quickly get token and token secrets during the talk. IRL, your client
+/// wouldn't do this.
+router.get("/faux_login", middleware: credentials)
+router.get("/faux_login") {
+    (request, response, next) in
+    response.send("\(twitterWebAuth.oAuthToken), \(twitterWebAuth.oAuthTokenSecret)")
+    next()
+}
 
 router.get("/") {
     (request: RouterRequest,
@@ -24,14 +55,15 @@ router.get("/") {
 }
 
 //MARK: PUT
-router.put("api/v2/card", middleware: BodyParser())
-router.put("api/v2/card") {
+router.put("api/v3/card", middleware: [BodyParser(), credentials]) //1
+router.put("api/v3/card") {
     (request, response, next) in
     
     guard
         let contentType = request.headers["Content-Type"],
         contentType == "application/json",
-        let body = request.body else {
+        let body = request.body,
+        let user = request.userProfile else { //1
             _ = response.send(status: .badRequest)
             next()
             return
@@ -45,6 +77,7 @@ router.put("api/v2/card") {
     }
     
     cardJson["type"].stringValue = "BaseballCard"
+    cardJson["userID"].stringValue = user.id //2
     
     database.create(cardJson, callback: {
         (optionalID: String?,
@@ -195,7 +228,7 @@ router.delete("api/v2/card/:id") {
 
 //MARK: Images
 //MARK: PUT
-router.put("/api/v1/card_image/:id", middleware: BodyParser()) //1
+router.put("/api/v1/card_image/:id", middleware: BodyParser()) 
 router.put("/api/v1/card_image/:id") {
     (request, response, next) in
     
@@ -204,13 +237,13 @@ router.put("/api/v1/card_image/:id") {
         let content = request.headers["Content-Type"],
         content == "image/jpeg",
         let body = request.body,
-        case let .raw(imageData) = body else { //2
+        case let .raw(imageData) = body else { 
             _ = response.send(status: .badRequest)
             next()
             return
     }
     
-    database.retrieve(id, callback: { //3
+    database.retrieve(id, callback: { 
         (optionalJSONDocument, optionalError) in
         
         guard
@@ -221,7 +254,7 @@ router.put("/api/v1/card_image/:id") {
                 return
         }
         
-        database.createAttachment(id, //4
+        database.createAttachment(id, 
             docRevison: revision,
             attachmentName: "image" + id,
             attachmentData: imageData,
@@ -234,7 +267,7 @@ router.put("/api/v1/card_image/:id") {
                 if
                     let _ = optionalNewRevision,
                     let _ = optionalDocument {
-                    _ = response.send(status: .OK) //5
+                    _ = response.send(status: .OK) 
                 }
                 else {
                     _ = response.send(status: .notModified)
@@ -251,24 +284,24 @@ router.get("/api/v1/card_image/:id") {
     guard
         let id = request.parameters["id"],
         let accept = request.headers["Accept"],
-        accept == "image/jpeg" else { //1
+        accept == "image/jpeg" else { 
             _ = response.send(status: .badRequest)
             next()
             return
     }
     
-    database.retrieveAttachment(id, //2
+    database.retrieveAttachment(id, 
                                 attachmentName: "image" + id,
                                 callback: {
                                     (optionalData, optionalError, optionalImageType) in
                                     
                                     defer { next() }
                                     
-                                    if let error = optionalError { //3
+                                    if let error = optionalError { 
                                         _ = response.send(status: .notFound)
                                     }
                                     else if let data = optionalData {
-                                        response.send(data: data) //4
+                                        response.send(data: data) 
                                     }
     })
 }
