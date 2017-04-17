@@ -95,8 +95,8 @@ router.get("api/v2/card/:id") {
 }
 
 //MARK: POST
-router.post("api/v1/card/:id", middleware: BodyParser())
-router.post("api/v1/card/:id") {
+router.post("api/v2/card/:id", middleware: BodyParser())
+router.post("api/v2/card/:id") {
     (request, response, next) in
 
     guard
@@ -110,29 +110,45 @@ router.post("api/v1/card/:id") {
     }
 
     guard
-        case let .json(cardJson) = body else {
+        case var .json(cardJson) = body else {
             _ = response.send(status: .unsupportedMediaType)
             next()
             return
     }
-
-    guard
-        let oldCardIndex = cards.index(where: {$0.id == id}) else {
-            _ = response.send(status: .notFound)
-            next()
-            return
-    }
-
-    let newCard = BaseballCard(playerName: cardJson["playerName"].stringValue,
-                               teamNames: cardJson["teamNames"].arrayValue.map({$0.stringValue}),
-                               year: cardJson["year"].intValue,
-                               cardNumber: cardJson["cardNumber"].stringValue,
-                               cardCompanyName: cardJson["cardCompanyName"].stringValue,
-                               id: id)
-
-    cards[oldCardIndex] = newCard
-    _ = response.send(status: .OK)
-    next()
+    
+    database.retrieve(id, //1
+        callback: {
+            (optionalJSONDocument, optionalError) in
+            
+            guard
+                let jsonDocument = optionalJSONDocument,
+                let revision = jsonDocument["_rev"].string else { //2
+                    _ = response.send(status: .notFound)
+                    next()
+                    return
+            }
+            
+            cardJson["type"].stringValue = "BaseballCard" //3
+            
+            database.update(id, //4
+                rev: revision,
+                document: cardJson,
+                callback: {
+                    (optionalUpdatedRevision, optionalUpdatedJSONDocument, optionalError) in
+                    
+                    guard
+                        let updatedRevision = optionalUpdatedRevision,
+                        let updatedDocument = optionalUpdatedJSONDocument,
+                        revision != updatedRevision else { //5
+                            _ = response.send(status: .internalServerError) //6
+                            next()
+                            return
+                    }
+                    
+                    _ = response.send(status: .OK) //7
+                    next()
+            })
+    })
 }
 
 //MARK: DELETE
