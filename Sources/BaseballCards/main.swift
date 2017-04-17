@@ -1,13 +1,13 @@
 import Kitura
 import SwiftyJSON
 import Foundation
-import CouchDB 
+import CouchDB
 
 //MARK: Database
 let connectionProperties = ConnectionProperties(host: "127.0.0.1",
                                                 port: 5984,
-                                                secured: false) 
-let client = CouchDBClient(connectionProperties: connectionProperties) 
+                                                secured: false)
+let client = CouchDBClient(connectionProperties: connectionProperties)
 let database = client.database("baseball_cards")
 
 let router = Router()
@@ -18,7 +18,7 @@ router.get("/") {
     (request: RouterRequest,
     response: RouterResponse,
     next: @escaping () -> Void) in
-
+    
     response.send("Hello, World!")
     next()
 }
@@ -27,7 +27,7 @@ router.get("/") {
 router.put("api/v2/card", middleware: BodyParser())
 router.put("api/v2/card") {
     (request, response, next) in
-
+    
     guard
         let contentType = request.headers["Content-Type"],
         contentType == "application/json",
@@ -36,33 +36,33 @@ router.put("api/v2/card") {
             next()
             return
     }
-
+    
     guard
         case var .json(cardJson) = body else {
             _ = response.send(status: .unsupportedMediaType)
             next()
             return
     }
-
-    cardJson["type"].stringValue = "BaseballCard" 
-
-    database.create(cardJson, callback: { 
+    
+    cardJson["type"].stringValue = "BaseballCard"
+    
+    database.create(cardJson, callback: {
         (optionalID: String?,
         optionalRevision: String?,
         optionalDocument: JSON?,
         optionalError: Error?) in
-
+        
         guard
             let id = optionalID,
             let revision = optionalRevision,
             let document = optionalDocument else {
-                _ = response.send(status: .internalServerError) 
+                _ = response.send(status: .internalServerError)
                 next()
                 return
         }
-
-
-        _ = response.send(id) 
+        
+        
+        _ = response.send(id)
         next()
     })
 }
@@ -70,17 +70,17 @@ router.put("api/v2/card") {
 //MARK: GET
 router.get("api/v2/card/:id") {
     (request, response, next) in
-
+    
     guard
         let id = request.parameters["id"] else {
             _ = response.send(status: .badRequest)
             next()
             return
     }
-
-    database.retrieve(id, callback: { 
+    
+    database.retrieve(id, callback: {
         (optionalJsonDocument: JSON?, optionalError: Error?) in
-
+        
         if
             let jsonDocument = optionalJsonDocument,
             jsonDocument["error"].string == .none { 
@@ -88,7 +88,7 @@ router.get("api/v2/card/:id") {
             _ = response.send(json: cardJson)
         }
         else {
-            _ = response.send(status: .notFound) 
+            _ = response.send(status: .notFound)
             next()
         }
     })
@@ -98,7 +98,7 @@ router.get("api/v2/card/:id") {
 router.post("api/v2/card/:id", middleware: BodyParser())
 router.post("api/v2/card/:id") {
     (request, response, next) in
-
+    
     guard
         let contentType = request.headers["Content-Type"],
         contentType == "application/json",
@@ -108,7 +108,7 @@ router.post("api/v2/card/:id") {
             next()
             return
     }
-
+    
     guard
         case var .json(cardJson) = body else {
             _ = response.send(status: .unsupportedMediaType)
@@ -116,38 +116,38 @@ router.post("api/v2/card/:id") {
             return
     }
     
-    database.retrieve(id, 
-        callback: {
-            (optionalJSONDocument, optionalError) in
-            
-            guard
-                let jsonDocument = optionalJSONDocument,
-                let revision = jsonDocument["_rev"].string else { 
-                    _ = response.send(status: .notFound)
-                    next()
-                    return
-            }
-            
-            cardJson["type"].stringValue = "BaseballCard" 
-            
-            database.update(id, 
-                rev: revision,
-                document: cardJson,
-                callback: {
-                    (optionalUpdatedRevision, optionalUpdatedJSONDocument, optionalError) in
-                    
-                    guard
-                        let updatedRevision = optionalUpdatedRevision,
-                        let updatedDocument = optionalUpdatedJSONDocument,
-                        revision != updatedRevision else { 
-                            _ = response.send(status: .internalServerError) 
-                            next()
-                            return
-                    }
-                    
-                    _ = response.send(status: .OK) 
-                    next()
-            })
+    database.retrieve(id,
+                      callback: {
+                        (optionalJSONDocument, optionalError) in
+                        
+                        guard
+                            let jsonDocument = optionalJSONDocument,
+                            let revision = jsonDocument["_rev"].string else {
+                                _ = response.send(status: .notFound)
+                                next()
+                                return
+                        }
+                        
+                        cardJson["type"].stringValue = "BaseballCard"
+                        
+                        database.update(id,
+                                        rev: revision,
+                                        document: cardJson,
+                                        callback: {
+                                            (optionalUpdatedRevision, optionalUpdatedJSONDocument, optionalError) in
+                                            
+                                            guard
+                                                let updatedRevision = optionalUpdatedRevision,
+                                                let updatedDocument = optionalUpdatedJSONDocument,
+                                                revision != updatedRevision else {
+                                                    _ = response.send(status: .internalServerError)
+                                                    next()
+                                                    return
+                                            }
+                                            
+                                            _ = response.send(status: .OK)
+                                            next()
+                        })
     })
 }
 
@@ -155,7 +155,7 @@ router.post("api/v2/card/:id") {
 
 router.delete("api/v2/card/:id") {
     (request, response, next) in
-
+    
     guard
         let id = request.parameters["id"] else {
             _ = response.send(status: .badRequest)
@@ -163,33 +163,33 @@ router.delete("api/v2/card/:id") {
             return
     }
     
-    database.retrieve(id, 
-        callback: {
-            (optionalJSONDocument, optionalError) in
-            
-            guard
-                let jsonDocument = optionalJSONDocument,
-                let revision = jsonDocument["_rev"].string else {
-                    _ = response.send(status: .notFound)
-                    next()
-                    return
-            }
-            
-            database.delete(id, 
-                rev: revision, callback: {
-                    (optionalError: NSError?) in
-                    
-                    if let error = optionalError { 
-                        _ = response.send(status: .internalServerError)
-                        next()
-                        return
-                    }
-                    else {
-                        _ = response.send(status: .OK) 
-                        next()
-                        return
-                    }
-            })
+    database.retrieve(id,
+                      callback: {
+                        (optionalJSONDocument, optionalError) in
+                        
+                        guard
+                            let jsonDocument = optionalJSONDocument,
+                            let revision = jsonDocument["_rev"].string else {
+                                _ = response.send(status: .notFound)
+                                next()
+                                return
+                        }
+                        
+                        database.delete(id,
+                                        rev: revision, callback: {
+                                            (optionalError: NSError?) in
+                                            
+                                            if let error = optionalError {
+                                                _ = response.send(status: .internalServerError)
+                                                next()
+                                                return
+                                            }
+                                            else {
+                                                _ = response.send(status: .OK)
+                                                next()
+                                                return
+                                            }
+                        })
     })
 }
 
@@ -222,26 +222,55 @@ router.put("/api/v1/card_image/:id") {
         }
         
         database.createAttachment(id, //4
-                                  docRevison: revision,
-                                  attachmentName: "image" + id,
-                                  attachmentData: imageData,
-                                  contentType: content,
-                                  callback: {
-                                    (optionalNewRevision, optionalDocument, optionalError) in
-                                    
-                                    defer { next() }
-                                    
-                                    if
-                                        let _ = optionalNewRevision,
-                                        let _ = optionalDocument {
-                                        _ = response.send(status: .OK) //5
-                                    }
-                                    else {
-                                        _ = response.send(status: .notModified)
-                                    }
+            docRevison: revision,
+            attachmentName: "image" + id,
+            attachmentData: imageData,
+            contentType: content,
+            callback: {
+                (optionalNewRevision, optionalDocument, optionalError) in
+                
+                defer { next() }
+                
+                if
+                    let _ = optionalNewRevision,
+                    let _ = optionalDocument {
+                    _ = response.send(status: .OK) //5
+                }
+                else {
+                    _ = response.send(status: .notModified)
+                }
         })
     })
     
+}
+
+//MARK: GET
+router.get("/api/v1/card_image/:id") {
+    (request, response, next) in
+    
+    guard
+        let id = request.parameters["id"],
+        let accept = request.headers["Accept"],
+        accept == "image/jpeg" else { //1
+            _ = response.send(status: .badRequest)
+            next()
+            return
+    }
+    
+    database.retrieveAttachment(id, //2
+                                attachmentName: "image" + id,
+                                callback: {
+                                    (optionalData, optionalError, optionalImageType) in
+                                    
+                                    defer { next() }
+                                    
+                                    if let error = optionalError { //3
+                                        _ = response.send(status: .notFound)
+                                    }
+                                    else if let data = optionalData {
+                                        response.send(data: data) //4
+                                    }
+    })
 }
 
 Kitura.addHTTPServer(onPort: 8090, with: router)
