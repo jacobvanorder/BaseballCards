@@ -137,15 +137,16 @@ router.get("api/v3/card/:id") {
 }
 
 //MARK: POST
-router.post("api/v2/card/:id", middleware: BodyParser())
-router.post("api/v2/card/:id") {
+router.post("api/v3/card/:id", middleware: [BodyParser(), credentials]) //1
+router.post("api/v3/card/:id") {
     (request, response, next) in
     
     guard
         let contentType = request.headers["Content-Type"],
         contentType == "application/json",
         let body = request.body,
-        let id = request.parameters["id"] else {
+        let id = request.parameters["id"],
+        let user = request.userProfile else { //2
             _ = response.send(status: .badRequest)
             next()
             return
@@ -170,7 +171,14 @@ router.post("api/v2/card/:id") {
                                 return
                         }
                         
+                        if jsonDocument["userID"].stringValue != user.id { //3
+                            _ = response.send(status: .unauthorized) //4
+                            next()
+                            return
+                        }
+                        
                         cardJson["type"].stringValue = "BaseballCard"
+                        cardJson["userID"].stringValue = user.id //5
                         
                         database.update(id,
                                         rev: revision,
