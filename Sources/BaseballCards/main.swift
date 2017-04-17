@@ -101,11 +101,13 @@ router.put("api/v3/card") {
 }
 
 //MARK: GET
-router.get("api/v2/card/:id") {
+router.get("api/v3/card/:id", middleware: credentials) //1
+router.get("api/v3/card/:id") {
     (request, response, next) in
     
     guard
-        let id = request.parameters["id"] else {
+        let id = request.parameters["id"],
+        let user = request.userProfile else { //2
             _ = response.send(status: .badRequest)
             next()
             return
@@ -116,9 +118,16 @@ router.get("api/v2/card/:id") {
         
         if
             let jsonDocument = optionalJsonDocument,
-            jsonDocument["error"].string == .none { 
-            let cardJson = BaseballCard.json(from: jsonDocument, with: id) 
-            _ = response.send(json: cardJson)
+            jsonDocument["error"].string == .none {
+            if jsonDocument["userID"].stringValue == user.id { //3
+                let cardJson = BaseballCard.json(from: jsonDocument, with: id)
+                _ = response.send(json: cardJson)
+                next()
+            }
+            else {
+                _ = response.send(status: .unauthorized) //4
+                next()
+            }
         }
         else {
             _ = response.send(status: .notFound)
