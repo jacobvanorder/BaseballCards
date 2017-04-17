@@ -1,13 +1,13 @@
 import Kitura
 import SwiftyJSON
 import Foundation
-import CouchDB //1
+import CouchDB 
 
 //MARK: Database
 let connectionProperties = ConnectionProperties(host: "127.0.0.1",
                                                 port: 5984,
-                                                secured: false) //2
-let client = CouchDBClient(connectionProperties: connectionProperties) //3
+                                                secured: false) 
+let client = CouchDBClient(connectionProperties: connectionProperties) 
 let database = client.database("baseball_cards")
 
 let router = Router()
@@ -44,9 +44,9 @@ router.put("api/v2/card") {
             return
     }
 
-    cardJson["type"].stringValue = "BaseballCard" //1
+    cardJson["type"].stringValue = "BaseballCard" 
 
-    database.create(cardJson, callback: { //2
+    database.create(cardJson, callback: { 
         (optionalID: String?,
         optionalRevision: String?,
         optionalDocument: JSON?,
@@ -56,13 +56,13 @@ router.put("api/v2/card") {
             let id = optionalID,
             let revision = optionalRevision,
             let document = optionalDocument else {
-                _ = response.send(status: .internalServerError) //3
+                _ = response.send(status: .internalServerError) 
                 next()
                 return
         }
 
 
-        _ = response.send(id) //4
+        _ = response.send(id) 
         next()
     })
 }
@@ -78,17 +78,17 @@ router.get("api/v2/card/:id") {
             return
     }
 
-    database.retrieve(id, callback: { //1
+    database.retrieve(id, callback: { 
         (optionalJsonDocument: JSON?, optionalError: Error?) in
 
         if
             let jsonDocument = optionalJsonDocument,
-            jsonDocument["error"].string == .none { //2
-            let cardJson = BaseballCard.json(from: jsonDocument, with: id) //3
+            jsonDocument["error"].string == .none { 
+            let cardJson = BaseballCard.json(from: jsonDocument, with: id) 
             _ = response.send(json: cardJson)
         }
         else {
-            _ = response.send(status: .notFound) //4
+            _ = response.send(status: .notFound) 
             next()
         }
     })
@@ -116,21 +116,21 @@ router.post("api/v2/card/:id") {
             return
     }
     
-    database.retrieve(id, //1
+    database.retrieve(id, 
         callback: {
             (optionalJSONDocument, optionalError) in
             
             guard
                 let jsonDocument = optionalJSONDocument,
-                let revision = jsonDocument["_rev"].string else { //2
+                let revision = jsonDocument["_rev"].string else { 
                     _ = response.send(status: .notFound)
                     next()
                     return
             }
             
-            cardJson["type"].stringValue = "BaseballCard" //3
+            cardJson["type"].stringValue = "BaseballCard" 
             
-            database.update(id, //4
+            database.update(id, 
                 rev: revision,
                 document: cardJson,
                 callback: {
@@ -139,13 +139,13 @@ router.post("api/v2/card/:id") {
                     guard
                         let updatedRevision = optionalUpdatedRevision,
                         let updatedDocument = optionalUpdatedJSONDocument,
-                        revision != updatedRevision else { //5
-                            _ = response.send(status: .internalServerError) //6
+                        revision != updatedRevision else { 
+                            _ = response.send(status: .internalServerError) 
                             next()
                             return
                     }
                     
-                    _ = response.send(status: .OK) //7
+                    _ = response.send(status: .OK) 
                     next()
             })
     })
@@ -163,7 +163,7 @@ router.delete("api/v2/card/:id") {
             return
     }
     
-    database.retrieve(id, //1
+    database.retrieve(id, 
         callback: {
             (optionalJSONDocument, optionalError) in
             
@@ -175,22 +175,73 @@ router.delete("api/v2/card/:id") {
                     return
             }
             
-            database.delete(id, //2
+            database.delete(id, 
                 rev: revision, callback: {
                     (optionalError: NSError?) in
                     
-                    if let error = optionalError { //3
+                    if let error = optionalError { 
                         _ = response.send(status: .internalServerError)
                         next()
                         return
                     }
                     else {
-                        _ = response.send(status: .OK) //4
+                        _ = response.send(status: .OK) 
                         next()
                         return
                     }
             })
     })
+}
+
+//MARK: Images
+//MARK: PUT
+router.put("/api/v1/card_image/:id", middleware: BodyParser()) //1
+router.put("/api/v1/card_image/:id") {
+    (request, response, next) in
+    
+    guard
+        let id = request.parameters["id"],
+        let content = request.headers["Content-Type"],
+        content == "image/jpeg",
+        let body = request.body,
+        case let .raw(imageData) = body else { //2
+            _ = response.send(status: .badRequest)
+            next()
+            return
+    }
+    
+    database.retrieve(id, callback: { //3
+        (optionalJSONDocument, optionalError) in
+        
+        guard
+            let jsonDocument = optionalJSONDocument,
+            let revision = jsonDocument["_rev"].string else {
+                _ = response.send(status: .notFound)
+                next()
+                return
+        }
+        
+        database.createAttachment(id, //4
+                                  docRevison: revision,
+                                  attachmentName: "image" + id,
+                                  attachmentData: imageData,
+                                  contentType: content,
+                                  callback: {
+                                    (optionalNewRevision, optionalDocument, optionalError) in
+                                    
+                                    defer { next() }
+                                    
+                                    if
+                                        let _ = optionalNewRevision,
+                                        let _ = optionalDocument {
+                                        _ = response.send(status: .OK) //5
+                                    }
+                                    else {
+                                        _ = response.send(status: .notModified)
+                                    }
+        })
+    })
+    
 }
 
 Kitura.addHTTPServer(onPort: 8090, with: router)
