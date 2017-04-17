@@ -202,12 +202,13 @@ router.post("api/v3/card/:id") {
 }
 
 //MARK: DELETE
-
-router.delete("api/v2/card/:id") {
+router.delete("api/v3/card/:id", middleware: credentials) //1
+router.delete("api/v3/card/:id") {
     (request, response, next) in
     
     guard
-        let id = request.parameters["id"] else {
+        let id = request.parameters["id"],
+        let user = request.userProfile else { //2
             _ = response.send(status: .badRequest)
             next()
             return
@@ -223,6 +224,12 @@ router.delete("api/v2/card/:id") {
                                 _ = response.send(status: .notFound)
                                 next()
                                 return
+                        }
+                        
+                        if jsonDocument["userID"].stringValue != user.id { //3
+                            _ = response.send(status: .unauthorized) //4
+                            next()
+                            return
                         }
                         
                         database.delete(id,
